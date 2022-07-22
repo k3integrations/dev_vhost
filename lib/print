@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+ptask() { # Print task
+  echo -e "\n\xf0\x9f\x94\xb5  $@"
+}
+
+pstep() {  # Print step, designed to be followed up by `pc`
+  echo -e "\xE2\x9E\xA1\xEF\xB8\x8F    $@"
+}
+
+pcompleted() {  # Print completed
+  echo -e "\xe2\x9c\x85     $@"
+}
+
+pwarn() {  # Print warning
+  echo -e >&2 "\xE2\x80\xBC\xEF\xB8\x8F  $@"
+}

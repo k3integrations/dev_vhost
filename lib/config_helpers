@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+
+# Try to use gnu sed on Mac and Linux
+function gnused_command {
+  if hash gsed 2>/dev/null; then
+    echo gsed
+  else
+    echo sed
+  fi
+}
+
+function gnused {
+  $(gnused_command) "$@"
+}
+
+function set_conf {
+  filename=$1
+  namespace=$2
+  group=$3
+  payload=$4
+  comment_style='#'
+
+  start_pattern="${comment_style} Config:${namespace}:${group}:start"
+  end_pattern="${comment_style} Config:${namespace}:${group}:end"
+
+  if ! grep -q "${start_pattern}" "${filename}"; then
+    printf "\n${start_pattern}\n${end_pattern}" | sudo tee -a $filename > /dev/null
+  fi
+
+  if ! grep -q "$payload" "${filename}"; then
+    sudo $(gnused_command) -ni "
+      /${start_pattern}/{
+        p
+        :a
+        N
+        /${end_pattern}/!ba
+        s/.*\n/${payload}\n/
+      }
+      p
+    " $filename
+  else
+    pstep "Already up to date"
+  fi
+}

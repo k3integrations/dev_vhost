@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+# Set $sudo if sudo is needed on this system
+if [ "$(uname)" == "Linux" ]; then
+  export sudo='sudo'
+else
+  export sudo=''
+fi

@@ -1,0 +1,8 @@
+function nginx_restart {
+  if [ "$(uname)" == "Darwin" ]; then
+    sudo brew services restart nginx
+  elif [ "$(uname)" == "Linux" ]; then
+    sudo systemctl restart nginx ||
+      systemctl status nginx.service
+  fi
+}

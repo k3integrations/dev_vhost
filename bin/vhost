@@ -1,0 +1,232 @@
+#!/usr/bin/env bash
+
+#═════════════════════════════════════════════════════════════════════════════════════════════════
+set -euo pipefail
+lib_dir="$( dirname "${BASH_SOURCE[0]}" )/../lib"
+source $lib_dir/general
+source $lib_dir/print
+source $lib_dir/config_helpers
+source $lib_dir/nginx_helpers
+
+#═════════════════════════════════════════════════════════════════════════════════════════════════
+function help() {
+  cat - <<End >&2
+Usage:
+  vhost <command> [<options>]
+  vhost new <vhost_name> [<options>]
+  vhost intsall [<options>]
+
+Commands:
+  new      Generate config for a new vhost and copy it into your current project's '$config_dir'
+  install  Installs the contents of your project's '$config_dir' into your system nginx config
+
+Options:
+  --config-dir=<path>  Read/update virtual host config from this directory instead of 'config/dev'
+  --sites-dir=<path>   Install virtual hosts to this directory instead of to '$sites_dir'
+End
+  exit 1
+}
+
+#═════════════════════════════════════════════════════════════════════════════════════════════════
+# Options
+
+cwd=$PWD
+config_dir=config/dev
+config_file=$config_dir/config.json
+nginx_config_dir=$config_dir/nginx
+sites_dir=$(ls -d \
+  /usr/local/etc/nginx/servers \
+  /etc/nginx/sites-enabled \
+  2>/dev/null
+) || true
+template_dir="$lib_dir/../template"
+
+# Parse options
+# Based on: https://medium.com/@Drew_Stokes/bash-argument-parsing-54f3b81a6a8f
+positional_args=""
+function require_arg() {
+  if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+    echo "$2"
+    return 0
+  else
+    echo "Error: Argument for $1 is missing" >&2
+    exit 1
+  fi
+}
+while (( "$#" )); do
+  case "$1" in
+    --config-dir)
+      config_dir=$(require_arg "$1" "$2")
+      shift 2
+      ;;
+    --sites-dir)
+      sites_dir=$(require_arg "$1" "$2")
+      shift 2
+      ;;
+    -*|--*=)
+      echo "Error: Unknown option: $1" >&2
+      exit 1
+      ;;
+    *) # preserve positional arguments
+      positional_args="$positional_args $1"
+      shift
+      ;;
+  esac
+done
+eval set -- "$positional_args"
+
+abs_config_dir=$cwd/$config_dir
+
+#═════════════════════════════════════════════════════════════════════════════════════════════════
+# Understand command
+
+command="${1:-}"; shift || true
+if [ -z "$command" ] || [ "$command" == "help" ]; then
+  help
+fi
+
+if [ "$command" = "new" ] ||
+   [ "$command" = "install" ]
+then
+  : # Recognized
+else
+  echo >&2 "No such command: $command"; echo
+  help
+fi
+
+#═════════════════════════════════════════════════════════════════════════════════════════════════
+# Check options
+
+function require_config_dir() {
+  if [ ! -d $abs_config_dir ]; then
+    pwarn "Could not find a config dir at '$config_dir'"
+    exit 1
+  fi
+}
+
+if [ -z "$sites_dir" ]; then
+  pwarn "Could not find any nginx sites dir"
+  exit 1
+fi
+if ! [ -d "$sites_dir" ]; then
+  pwarn "nginx sites dir $sites_dir is not a directory"
+  exit 1
+fi
+
+#═════════════════════════════════════════════════════════════════════════════════════════════════
+# Check for prerequisites
+
+if ! hash envsubst 2>/dev/null; then
+  echo 2> "Please install envsubst"
+fi
+if ! hash jq 2>/dev/null; then
+  echo 2> "Please install jq"
+fi
+if ! hash openssl 2>/dev/null; then
+  echo 2> "Please install openssl"
+fi
+
+
+#═════════════════════════════════════════════════════════════════════════════════════════════════
+if [ "$command" = "new" ]; then
+  vhost_name="${1:-}"; shift || true
+  if [ -z "$vhost_name" ]; then
+    echo "Missing vhost_name" >&2
+    exit 1
+  fi
+
+  ptask "Add virtual host $vhost_name to your project"
+  src_files="$( cd $template_dir; find . -type f )"
+  for src_file in $src_files; do
+    dest_file=$(
+      echo "$src_file" |
+        sed -e "s/{vhost_name}/$vhost_name/"
+    )
+    dest_file=${dest_file#./}
+    dest_path=$config_dir/$dest_file
+    pstep "$dest_path"
+    mkdir -p "$(dirname $dest_path)"
+    export vhost_name
+    envsubst '$vhost_name' \
+      < $template_dir/$src_file \
+      > "$dest_path"
+  done
+
+  project_name=$(basename $cwd)
+  pstep "$config_file"
+  jq <<End > $config_file
+{
+  "name": "$project_name",
+  "hosts": [
+    "$vhost_name"
+  ]
+}
+End
+fi
+
+#═════════════════════════════════════════════════════════════════════════════════════════════════
+if [ "$command" = "install" ]; then
+  require_config_dir
+  ip=127.0.0.1
+  hosts=$( jq -rM '.hosts | join(" ")' $config_file )
+  host_line="$ip $hosts"
+  project_name=$(jq -rM '.name' $config_file)
+
+  ptask "Sync /etc/hosts"
+  pstep "Updating..."
+  set_conf '/etc/hosts' "${project_name}" 1 "${host_line}"
+  pcompleted "Done!"
+
+  ptask "Install project into your system nginx"
+
+  # Copy all configs to a '.generated' folder and envsubst
+  src_dir=$nginx_config_dir
+
+  function digest_for_dir() {
+    dir=$1
+    hash=''
+    shopt -s lastpipe # http://mywiki.wooledge.org/BashFAQ/024
+    if ! [ -d $src_dir/.generated ]; then return; fi
+    find $src_dir/.generated -type f -print0 | while read -d $'\0' file; do
+      hash="$hash:$(openssl md5 $file)"
+    done
+  }
+  file_hash_before=$(digest_for_dir "$src_dir/.generated")
+
+  # Export variables to be used by envsubst
+  export project_dir=$cwd
+  export config_dir=$cwd/$src_dir/.generated
+
+  pstep "Generating $src_dir/.generated"
+  rm   -rf $src_dir/.generated
+  mkdir -p $src_dir/.generated
+  shopt -s lastpipe
+  find $src_dir -type f -print0 | while read -d $'\0' file; do
+    rel_path=${file#$src_dir/}
+    dest_dir=$(dirname "$src_dir/.generated/$rel_path")
+    mkdir -p $dest_dir
+    envsubst '$config_dir' \
+      < $file \
+      > "$src_dir/.generated/$rel_path"
+  done
+
+  # Symlink project nginx config to nginx
+  index_file=$src_dir/.generated/index.conf
+  abs_index_file=$cwd/$index_file
+  link_path=$sites_dir/$project_name.conf
+  if ! [ -e $link_path ] || \
+       [ "$(readlink $link_path)" != $abs_index_file ]
+  then
+    pstep "Symlink $link_path -> $index_file"
+    $sudo ln -sf $abs_index_file $link_path
+  fi
+
+  # Only restart nginx if we changed the config
+  file_hash_after=$(digest_for_dir "$src_dir/.generated")
+  if [[ $file_hash_before != $file_hash_after ]]; then
+    nginx_restart
+  else
+    pstep "Content has not changed. Not restarting nginx"
+  fi
+  pcompleted "Done!"
+fi
