@@ -14,7 +14,7 @@ function help() {
 Usage:
   vhost <command> [<options>]
   vhost new <vhost_name> [<options>]
-  vhost intsall [<options>]
+  vhost install [<options>]
 
 Commands:
   new      Generate config for a new vhost and copy it into your current project's '$config_dir'
