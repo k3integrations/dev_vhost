@@ -21,6 +21,7 @@ Commands:
   install  Installs the contents of your project's '$config_dir' into your system nginx config
 
 Options:
+  -r, -restart         Restart server even if no config changes are detected.
   --config-dir=<path>  Read/update virtual host config from this directory instead of 'config/dev'
   --sites-dir=<path>   Install virtual hosts to this directory instead of to '$sites_dir'
 End
@@ -31,6 +32,7 @@ End
 # Options
 
 cwd=$PWD
+restart=auto
 config_dir=config/dev
 config_file=$config_dir/config.json
 nginx_config_dir=$config_dir/nginx
@@ -55,6 +57,10 @@ function require_arg() {
 }
 while (( "$#" )); do
   case "$1" in
+    -r|--restart)
+      restart=always
+      shift
+      ;;
     --config-dir)
       config_dir=$(require_arg "$1" "$2")
       shift 2
@@ -190,6 +196,7 @@ if [ "$command" = "install" ]; then
     find $src_dir/.generated -type f -print0 | while read -d $'\0' file; do
       hash="$hash:$(openssl md5 $file)"
     done
+    echo $hash
   }
   file_hash_before=$(digest_for_dir "$src_dir/.generated")
 
@@ -221,12 +228,17 @@ if [ "$command" = "install" ]; then
     $sudo ln -sf $abs_index_file $link_path
   fi
 
-  # Only restart nginx if we changed the config
-  file_hash_after=$(digest_for_dir "$src_dir/.generated")
-  if [[ $file_hash_before != $file_hash_after ]]; then
+  if [ "$restart" = "auto" ]; then
+    # Only restart nginx if we changed the config
+    file_hash_after=$(digest_for_dir "$src_dir/.generated")
+    if [[ $file_hash_before != $file_hash_after ]]; then
+      nginx_restart
+    else
+      pstep "Content has not changed. Not restarting nginx"
+    fi
+  elif [ "$restart" = "always" ]; then
     nginx_restart
-  else
-    pstep "Content has not changed. Not restarting nginx"
   fi
+
   pcompleted "Done!"
 fi
