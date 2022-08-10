@@ -21,11 +21,16 @@ From the root of your project, run `vhost`, which will show you the usage instru
 Usage:
   vhost <command> [<options>]
   vhost new <vhost_name> [<options>]
-  vhost intsall [<options>]
+  vhost install [<options>]
 
 Commands:
   new      Generate config for a new vhost and copy it into your current project's 'config/dev'
   install  Installs the contents of your project's 'config/dev' into your system nginx config
+
+Options:
+  -r, -restart         Restart server even if no config changes are detected.
+  --config-dir=<path>  Read/update virtual host config from this directory instead of 'config/dev'
+  --sites-dir=<path>   Install virtual hosts to this directory instead of to '/etc/nginx/sites-enabled'
 ```
 
 ## Requirements
