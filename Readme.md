@@ -15,7 +15,7 @@ When you run `vhost install`, this tool will automatically add or update your `n
 
 ## Usage
 
-From the root of your project, run `vhost`, which will show you the usage instructions: 
+From the root of your project, run `vhost`, which will show you the usage instructions:
 
 ```
 Usage:
@@ -34,6 +34,15 @@ Options:
 ```
 
 ## Requirements
+
+### Bash
+
+You need at least Bash 4.2. Mac may not have this up to date.
+
+On Mac:
+```
+brew install bash
+```
 
 ### Nginx
 
