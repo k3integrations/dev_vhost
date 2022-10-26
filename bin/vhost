@@ -35,6 +35,7 @@ cwd=$PWD
 restart=auto
 config_dir=config/dev
 config_file=$config_dir/config.json
+local_config_file=$config_dir/config.local.json
 nginx_config_dir=$config_dir/nginx
 sites_dir=$(ls -d \
   /opt/homebrew/etc/nginx/servers \
@@ -174,10 +175,27 @@ fi
 #═════════════════════════════════════════════════════════════════════════════════════════════════
 if [ "$command" = "install" ]; then
   require_config_dir
+
   ip=127.0.0.1
-  hosts=$( jq -rM '.hosts | join(" ")' $config_file )
+  # Merge local config if any
+  if test -f "$local_config_file"; then
+    ptask "Using local config"
+    config=$(jq -s '.[0] * .[1]' $config_file $local_config_file)
+  else
+    config=$(cat $config_file)
+  fi
+  hosts=$(echo $config | jq -rM '.hosts | join(" ")')
+
+  env_vars=$(                                 echo $config | jq -rM '(.env // {}) | to_entries | map(.key + @sh "=\(.value)") | join(" ")' || '')
+  envsubst_vars="\$project_dir,\$config_dir,$(echo $config | jq -rM '(.env // {}) | to_entries | map("$" + .key)              | join(",")' || '')"
+
   host_line="$ip $hosts"
-  project_name=$(jq -rM '.name' $config_file)
+  project_name=$(echo $config | jq -rM '.name')
+
+  # Use provided env vars from config
+  if [[ ! -z "${env_vars}" ]]; then
+    eval "export $env_vars"
+  fi
 
   ptask "Sync /etc/hosts"
   pstep "Updating..."
@@ -213,7 +231,7 @@ if [ "$command" = "install" ]; then
     rel_path=${file#$src_dir/}
     dest_dir=$(dirname "$src_dir/.generated/$rel_path")
     mkdir -p $dest_dir
-    envsubst '$config_dir' \
+    envsubst "$envsubst_vars" \
       < $file \
       > "$src_dir/.generated/$rel_path"
   done
