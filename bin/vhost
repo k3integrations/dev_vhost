@@ -186,13 +186,9 @@ if [ "$command" = "install" ]; then
   fi
   hosts=$(echo $config | jq -rM '.hosts | join(" ")')
 
-  if [[  "$(echo $config  | jq 'has("env")')" == "true" ]]; then
-    env_vars=$(echo $config | jq -rM '.env | to_entries | map(.key + @sh "=\(.value)")| join(" ")' || '')
-    envsubst_vars="\$project_dir,\$config_dir,$(echo $config | jq -rM '.env | to_entries | map("$" + .key)| join(",")' || '')"
-  else
-    env_vars=""
-    envsubst_vars="\$project_dir,\$config_dir"
-  fi
+  env_vars=$(                                 echo $config | jq -rM '(.env // {}) | to_entries | map(.key + @sh "=\(.value)") | join(" ")' || '')
+  envsubst_vars="\$project_dir,\$config_dir,$(echo $config | jq -rM '(.env // {}) | to_entries | map("$" + .key)              | join(",")' || '')"
+
   host_line="$ip $hosts"
   project_name=$(echo $config | jq -rM '.name')
 
