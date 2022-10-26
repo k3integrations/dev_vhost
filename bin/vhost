@@ -35,7 +35,7 @@ cwd=$PWD
 restart=auto
 config_dir=config/dev
 config_file=$config_dir/config.json
-local_config_file=$config_dir/local.json
+local_config_file=$config_dir/config.local.json
 nginx_config_dir=$config_dir/nginx
 sites_dir=$(ls -d \
   /opt/homebrew/etc/nginx/servers \
@@ -198,10 +198,8 @@ if [ "$command" = "install" ]; then
 
   # Use provided env vars from config
   if [[ ! -z "${env_vars}" ]]; then
-    echo $env_vars
     eval "export $env_vars"
   fi
-  # For configs to be able to reference other sibling files
 
   ptask "Sync /etc/hosts"
   pstep "Updating..."
