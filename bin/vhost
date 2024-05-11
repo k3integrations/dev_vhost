@@ -172,7 +172,7 @@ if [ "$command" = "new" ]; then
 End
 fi
 
-#═════════════════════════════════════════════════════════════════════════════════════════════════
+#═══════════════════════════════════════════════════════════════════════════════════════════════════
 if [ "$command" = "install" ]; then
   require_config_dir
 
@@ -186,43 +186,42 @@ if [ "$command" = "install" ]; then
   fi
   hosts=$(echo $config | jq -rM '.hosts | join(" ")')
 
-  env_vars=$(                                 echo $config | jq -rM '(.env // {}) | to_entries | map(.key + @sh "=\(.value)") | join(" ")' || '')
-  envsubst_vars="\$project_dir,\$config_dir,$(echo $config | jq -rM '(.env // {}) | to_entries | map("$" + .key)              | join(",")' || '')"
-
   host_line="$ip $hosts"
   project_name=$(echo $config | jq -rM '.name')
 
-  # Use provided env vars from config
-  if [[ ! -z "${env_vars}" ]]; then
-    eval "export $env_vars"
-  fi
-
+  #═════════════════════════════════════════════════════════════════════════════════════════════════
   ptask "Sync /etc/hosts"
   pstep "Updating..."
   set_conf '/etc/hosts' "${project_name}" 1 "${host_line}"
   pcompleted "Done!"
 
-  ptask "Install project into your system nginx"
+  #═════════════════════════════════════════════════════════════════════════════════════════════════
+  ptask "Generating nginx config"
 
   # Copy all configs to a '.generated' folder and envsubst
   src_dir=$nginx_config_dir
 
-  function digest_for_dir() {
-    dir=$1
-    hash=''
-    shopt -s lastpipe # http://mywiki.wooledge.org/BashFAQ/024
-    if ! [ -d $src_dir/.generated ]; then return; fi
-    find $src_dir/.generated -type f -print0 | while read -d $'\0' file; do
-      hash="$hash:$(openssl md5 $file)"
-    done
-    echo $hash
-  }
-  file_hash_before=$(digest_for_dir "$src_dir/.generated")
+  #─────────────────────────────────────────────────────────────────────────────────────────────────
+  pstep "Gathering env values"
+
+  # A null value means to get the value from env.
+  # | del(.[] | select(.value==null)) deletes entries with null values, which prevents the export
+  # $env_values from actually setting/overriding the value of an environment value. We don't do that
+  # for envsubst_vars, however, because we still need it in the list of variables to substitute.
+  env_values=$(                               echo $config | jq -rM '(.env // {}) | to_entries | del(.[] | select(.value==null)) | map(.key + @sh "=\(.value)") | join(" ")' || '')
+  envsubst_vars="\$project_dir,\$config_dir,$(echo $config | jq -rM '(.env // {}) | to_entries |                                   map("$" + .key)              | join(",")' || '')"
+  pcompleted "$envsubst_vars"
+
+  # Use provided env var values from config
+  if [[ ! -z "${env_values}" ]]; then
+    eval "export $env_values"
+  fi
 
   # Export variables to be used by envsubst
   export project_dir=$cwd
   export config_dir=$cwd/$src_dir/.generated
 
+  #─────────────────────────────────────────────────────────────────────────────────────────────────
   pstep "Generating $src_dir/.generated"
   rm   -rf $src_dir/.generated
   mkdir -p $src_dir/.generated
@@ -235,6 +234,21 @@ if [ "$command" = "install" ]; then
       < $file \
       > "$src_dir/.generated/$rel_path"
   done
+
+  #═════════════════════════════════════════════════════════════════════════════════════════════════
+  ptask "Install project into your system nginx"
+
+  function digest_for_dir() {
+    dir=$1
+    hash=''
+    shopt -s lastpipe # http://mywiki.wooledge.org/BashFAQ/024
+    if ! [ -d $src_dir/.generated ]; then return; fi
+    find $src_dir/.generated -type f -print0 | while read -d $'\0' file; do
+      hash="$hash:$(openssl md5 $file)"
+    done
+    echo $hash
+  }
+  file_hash_before=$(digest_for_dir "$src_dir/.generated")
 
   # Symlink project nginx config to nginx
   index_file=$src_dir/.generated/index.conf

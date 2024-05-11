@@ -33,6 +33,41 @@ Options:
   --sites-dir=<path>   Install virtual hosts to this directory instead of to '/etc/nginx/sites-enabled'
 ```
 
+## Configuration
+
+Each project should have a config file at `config/dev/config.json`.
+
+If a `config/dev/config.local.json` is present, its contents will be merged in as well. This allows
+you to have local overrides that are not committed to the repository.
+
+Example:
+
+```json
+{
+  "name": "my_project_name",
+  "hosts": [
+    "host1.test",
+    "host2.test"
+  ],
+  "env": {
+    "PORT": null,
+    "OVERRIDE_SOMETHING": "overridden"
+  }
+}
+```
+
+### `env` (optional)
+
+The variables `$project_dir` and `$config_dir` are provided for you and available for use in your
+`config/dev/nginx/vhosts/*conf` files.
+
+If an `env` section is provided, it lists additional variables that will be passed to `envsubst`.
+
+Similar to
+[docker-compose files](https://docs.docker.com/compose/compose-file/05-services/#environment),
+if a value is provided, it will be used (and override anything set in your environment). If no value
+is provided (`null`), the value must already be provided by your environment.
+
 ## Requirements
 
 ### Bash
