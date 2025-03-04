@@ -36,6 +36,7 @@ restart=auto
 config_dir=config/dev
 config_file=$config_dir/config.json
 local_config_file=$config_dir/config.local.json
+export config_file
 nginx_config_dir=$config_dir/nginx
 sites_dir=$(ls -d \
   /opt/homebrew/etc/nginx/servers \
@@ -120,6 +121,31 @@ if ! [ -d "$sites_dir" ]; then
   pwarn "nginx sites dir $sites_dir is not a directory"
   exit 1
 fi
+
+# Scan a file for environment variable references and warn if any are "undeclared" (not listed in
+# config file and therefore not being substituted with values).
+check_vars_in_file() {
+  local file="$1"
+  local vars_found undefined_vars=()
+
+  # Find variables in the file that look like $VAR or ${VAR}
+  vars_found=$(grep -o -E '\$[A-Z][A-Z0-9_]*|\$\{[A-Z][A-Z0-9_]*\}' "$file" | sort | uniq || true)
+
+  local var var_clean
+  for var in $vars_found; do
+    # Normalize by removing any braces so that both $PORT and ${PORT} become PORT.
+    var_clean=$(echo "$var" | sed 's/[\${}]//g')
+    # Check if the variable is in our envsubst_vars list.
+    if ! echo "$envsubst_vars" | grep -q "\$$var_clean"; then
+      undefined_vars+=("\$$var_clean")
+    fi
+  done
+
+  # If any undefined variables were found, print one consolidated warning.
+  if [ ${#undefined_vars[@]} -gt 0 ]; then
+    pwarn "Warning: variables ${undefined_vars[*]} are referenced in $file but not listed in .env section of $config_file. This may prevent nginx from starting." >&2
+  fi
+}
 
 #═════════════════════════════════════════════════════════════════════════════════════════════════
 # Check for prerequisites
@@ -211,6 +237,7 @@ if [ "$command" = "install" ]; then
   env_values=$(                               echo $config | jq -rM '(.env // {}) | to_entries | del(.[] | select(.value==null)) | map(.key + @sh "=\(.value)") | join(" ")' || '')
   envsubst_vars="\$project_dir,\$config_dir,$(echo $config | jq -rM '(.env // {}) | to_entries |                                   map("$" + .key)              | join(",")' || '')"
   pcompleted "$envsubst_vars"
+  export envsubst_vars
 
   # Use provided env var values from config
   if [[ ! -z "${env_values}" ]]; then
@@ -230,6 +257,7 @@ if [ "$command" = "install" ]; then
     rel_path=${file#$src_dir/}
     dest_dir=$(dirname "$src_dir/.generated/$rel_path")
     mkdir -p $dest_dir
+    check_vars_in_file "$file"
     envsubst "$envsubst_vars" \
       < $file \
       > "$src_dir/.generated/$rel_path"
