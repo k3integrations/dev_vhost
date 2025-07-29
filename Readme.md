@@ -85,12 +85,12 @@ You must have nginx running locally on your system.
 
 On Mac:
 ```
-brew-install nginx
+brew install nginx
 ```
 
 On Linux:
 ```
-apt-install nginx
+apt install nginx
 ```
 
 `vhost` will automatically detect your nginx "sites" directory, if it is one of
@@ -106,7 +106,7 @@ brew install jq
 ```
 
 ```
-apt-install jq
+apt install jq
 ```
 
 ### envsubst (gettext)
