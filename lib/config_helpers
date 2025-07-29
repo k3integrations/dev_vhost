@@ -24,7 +24,7 @@ function set_conf {
   end_pattern="${comment_style} Config:${namespace}:${group}:end"
 
   if ! grep -q "${start_pattern}" "${filename}"; then
-    printf "\n${start_pattern}\n${end_pattern}" | sudo tee -a $filename > /dev/null
+    printf "\n${start_pattern}\n${end_pattern}\n" | sudo tee -a "$filename" > /dev/null
   fi
 
   if ! grep -q "$payload" "${filename}"; then
