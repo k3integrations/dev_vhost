@@ -10,7 +10,13 @@ function gnused_command {
 }
 
 function gnused {
-  $(gnused_command) "$@"
+  local cmd=$(gnused_command)
+
+  if [[ "$OSTYPE" == "darwin"* ]] && [[ "$cmd" != "gsed" ]]; then
+    $cmd -i '' "$@"
+  else
+    $cmd -i "$@"
+  fi
 }
 
 function set_conf {
@@ -24,20 +30,18 @@ function set_conf {
   end_pattern="${comment_style} Config:${namespace}:${group}:end"
 
   if ! grep -q "${start_pattern}" "${filename}"; then
-    printf "\n${start_pattern}\n${end_pattern}" | sudo tee -a $filename > /dev/null
+    printf "\n${start_pattern}\n${end_pattern}\n" | sudo tee -a "$filename" > /dev/null
   fi
 
-  if ! grep -q "$payload" "${filename}"; then
-    sudo $(gnused_command) -ni "
-      /${start_pattern}/{
-        p
-        :a
-        N
-        /${end_pattern}/!ba
-        s/.*\n/${payload}\n/
-      }
+  if ! grep -qF "$payload" "${filename}"; then
+    sudo $(gnused_command) -i '' -n "/${start_pattern}/{
       p
-    " $filename
+      :a
+      N
+      /${end_pattern}/!ba
+      s/.*\n/${payload}\n/
+    }
+    p" "$filename"
   else
     pstep "Already up to date"
   fi
