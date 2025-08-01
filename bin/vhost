@@ -249,6 +249,19 @@ if [ "$command" = "install" ]; then
   export config_dir=$cwd/$src_dir/.generated
 
   #─────────────────────────────────────────────────────────────────────────────────────────────────
+  function digest_for_dir() {
+    dir=$1
+    hash=''
+    shopt -s lastpipe # http://mywiki.wooledge.org/BashFAQ/024
+    if ! [ -d $src_dir/.generated ]; then return; fi
+    find $src_dir/.generated -type f -print0 | while read -d $'\0' file; do
+      hash="$hash:$(openssl md5 $file)"
+    done
+    echo $hash
+  }
+  file_hash_before=$(digest_for_dir "$src_dir/.generated")
+
+  #─────────────────────────────────────────────────────────────────────────────────────────────────
   pstep "Generating $src_dir/.generated"
   rm   -rf $src_dir/.generated
   mkdir -p $src_dir/.generated
@@ -265,18 +278,6 @@ if [ "$command" = "install" ]; then
 
   #═════════════════════════════════════════════════════════════════════════════════════════════════
   ptask "Install project into your system nginx"
-
-  function digest_for_dir() {
-    dir=$1
-    hash=''
-    shopt -s lastpipe # http://mywiki.wooledge.org/BashFAQ/024
-    if ! [ -d $src_dir/.generated ]; then return; fi
-    find $src_dir/.generated -type f -print0 | while read -d $'\0' file; do
-      hash="$hash:$(openssl md5 $file)"
-    done
-    echo $hash
-  }
-  file_hash_before=$(digest_for_dir "$src_dir/.generated")
 
   # Symlink project nginx config to nginx
   index_file=$src_dir/.generated/index.conf
