@@ -218,7 +218,7 @@ if [ "$command" = "install" ]; then
   #═════════════════════════════════════════════════════════════════════════════════════════════════
   ptask "Sync /etc/hosts"
   pstep "Updating..."
-  set_conf '/etc/hosts' "${project_name}" 1 "${host_line}"
+  update_hosts "${project_name}" 1 "${host_line}"
   pcompleted "Done!"
 
   #═════════════════════════════════════════════════════════════════════════════════════════════════

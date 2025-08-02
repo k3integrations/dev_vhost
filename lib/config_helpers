@@ -13,7 +13,11 @@ function gnused {
   $(gnused_command) "$@"
 }
 
-function set_conf {
+function update_hosts {
+  add_or_update_section_in_conf_file '/etc/hosts' "$@"
+}
+
+function add_or_update_section_in_conf_file {
   filename=$1
   namespace=$2
   group=$3
