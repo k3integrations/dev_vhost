@@ -99,6 +99,14 @@ apt install nginx
 
 Otherwise, you must provide it with the `--sites-dir` option.
 
+### GNU sed
+
+Standard on Linux. On Mac:
+
+```
+brew install gnu-sed
+```
+
 ### jq
 
 ```
